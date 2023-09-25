@@ -1,0 +1,625 @@
+<html>
+    <head>
+        <title>RayCaster</title>
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+        <script>
+            var mapWidth = 10;
+            var mapHeight = 10;
+            var tileWidth = 32;
+            var tileHeight = 32;
+            var screenWidth = 640;
+            var screenHeight = 480;
+            var FOV = 90.0;
+            var gameMap;
+            var playerX, playerY, playerAngle, playerHeight;
+            var ctx, mctx, ectx;
+            var projectionPlane = (screenWidth/2)/Math.tan(DegToRad(FOV/2));
+            var wallHeight = 64;
+
+            var angIncArr, angIncArrCos;
+            var wallImg, floorImg, floordata;
+
+            
+
+            //
+            //
+            //
+            //  When casting a ray check that our point is within the map size? Some blue dots are showing way off in the distance so maybe can stop all those?
+            //
+            //
+            //
+
+            function init()
+            {
+                InitGame();
+                InitMap();
+                InitialCalcs();
+
+
+                Draw();
+            }
+
+            function InitGame()
+            {
+                c = document.getElementById("game_canvas");
+                c.addEventListener("keydown", Input, true);
+                c.width = screenWidth;
+                c.height = screenHeight;
+                ctx = c.getContext("2d");
+                
+                e = document.getElementById("edit_canvas");
+                e.addEventListener("click", InputEdit, true);
+                ectx = e.getContext("2d");
+
+                m = document.getElementById("map_canvas");
+                mctx = m.getContext("2d");
+
+                playerX = 160;//(mapWidth*tileWidth)/2;
+                playerY = 160;//(mapHeight*tileHeight)/2;
+                playerAngle = 45.0;
+                playerHeight = 32;
+
+                wallImg = document.getElementById("wall");
+                //floorImg = document.getElementById("floor");
+                floorImg = new Image();
+                floorImg.src = "images/floor.png";
+                //LoadImage();
+            }
+            
+            function LoadImage()
+            {
+                ctx.drawImage(floorImg, 0, 0);
+                floordata = ctx.getImageData(0, 0, 32, 32);
+            }
+
+            function InitMap()
+            {
+                gameMap = [];
+                // going to create an empty room with walls around the outside
+                for (i=0; i<mapWidth; i++)
+                {
+                    gameMap[i] = [];
+                    for (j=0; j<mapHeight; j++)
+                    {
+                        if (i==0 || j==0 || i==(mapWidth-1) || j==(mapHeight-1))
+                        {
+                            // edge of map
+                            gameMap[i][j] = 1;
+                        }
+                        else
+                        {
+                            // inside the walls
+                            gameMap[i][j] = 0;
+                        }                        
+                    }
+                }
+                
+            }
+
+            function Input(e)
+            {
+                //alert(e.keyCode);
+                if (e.keyCode == 68) // D
+                {
+                    playerAngle = playerAngle-1;
+                    if (playerAngle < 0)
+                    {
+                        playerAngle = playerAngle + 360;
+                    }
+                    else if (playerAngle >= 360)
+                    {
+                        playerAngle = playerAngle - 360;
+                    }                    
+                }
+                else if (e.keyCode == 65) // A
+                {
+                    playerAngle = playerAngle+1;
+                    if (playerAngle < 0)
+                    {
+                        playerAngle = playerAngle + 360;
+                    }
+                    else if (playerAngle >= 360)
+                    {
+                        playerAngle = playerAngle - 360;
+                    }                    
+                }
+                else if (e.keyCode == 87) // W
+                {
+                    xDisp = Math.cos(DegToRad(playerAngle));
+                    yDisp = Math.sin(DegToRad(playerAngle));
+                    
+                    playerX = playerX+xDisp;
+                    playerY = playerY-yDisp;
+                }
+                else if (e.keyCode == 83) // S
+                {
+                    xDisp = Math.cos(DegToRad(playerAngle));
+                    yDisp = Math.sin(DegToRad(playerAngle));
+                    
+                    playerX = playerX-xDisp;
+                    playerY = playerY+yDisp;
+                }
+                //console.log("a: "+playerAngle+" / x: "+playerX+" / y:"+playerY);
+                Draw();
+            }
+
+            function InputEdit(e)
+            {
+                if (e.button == 0)
+                {
+                    xPos = e.offsetX;
+                    yPos = e.offsetY;
+                    
+                    xTile = Math.floor(xPos/tileWidth);
+                    yTile = Math.floor(yPos/tileHeight);
+
+                    if (xTile < mapWidth && xTile > -1 && yTile < mapHeight && yTile > -1)
+                    {
+                        if (gameMap[xTile][yTile] == 0)
+                        {
+                            gameMap[xTile][yTile] = 1;
+                        }
+                        else if (gameMap[xTile][yTile] == 1)
+                        {
+                            gameMap[xTile][yTile] = 0;
+                        }
+                    }
+
+                    Draw();
+                }
+            }
+
+            function Draw()
+            {
+                startTime = Date.now();
+
+                var wallDist, vAngle, tmpAngle, sliceHeight, wallPos;
+
+                DrawMap();
+                DrawEditor();
+                
+                ctx.fillStyle = "#FFFFFF";
+                ctx.fillRect(0,0,screenWidth,screenHeight);
+
+                tmpAngleA = playerAngle;
+                tmpAngle = tmpAngleA;
+
+                for (i=0; i<screenWidth; i++)
+                {      
+                    
+                       
+                    tmpAngle = tmpAngleA-angIncArr[i];
+                    if (tmpAngle < 0)
+                    {
+                        tmpAngle = tmpAngle + 360;
+                    }
+                    else if (tmpAngle >= 360)
+                    {
+                        tmpAngle = tmpAngle - 360;
+                    }
+                    
+                    ret = CastRay(tmpAngle);
+                    wallDist = ret[0];
+                    wallPos = Math.floor(ret[1]);
+                    
+
+                   
+                    
+
+                    tca = Math.cos(DegToRad(tmpAngle-playerAngle));
+                    wallDist = wallDist*tca;
+                    
+                    
+                    sliceHeight = (wallHeight/wallDist)*projectionPlane;
+
+                    //ctx.fillStyle = "#000000";
+                    //ctx.fillRect(i,(screenHeight/2)-(sliceHeight/2),1,sliceHeight);
+
+                    ctx.drawImage(wallImg, wallPos, 0, 1, 64, i, (screenHeight/2)-(sliceHeight/2), 1, sliceHeight);
+                    
+                    DrawFloor(Math.floor((screenHeight/2)-(sliceHeight/2)+sliceHeight),tmpAngle,i,tca);
+                    
+                    
+                }
+
+                endTime = Date.now();
+                
+                
+            }
+
+            function DrawFloor(firstRow,angle,col,miniang)
+            {
+                var loop = 1;
+                var PJ = firstRow;
+                var ta = Math.tan(DegToRad(angle));
+                
+                while (loop == 1)
+                {
+                    
+                    straightDistance = ( playerHeight / (PJ-screenHeight/2) ) * projectionPlane;
+                    dis = straightDistance/miniang;
+                    tx = Math.cos(DegToRad(angle))*dis;
+                    ty = Math.sin(DegToRad(angle))*dis;
+
+                    if (PJ == firstRow && col == 0)
+                    {
+                        //console.log("SD: " + straightDistance);
+                        //console.log("D:" + dis);
+                        //console.log("TX: " + tx);
+                        //console.log("TY: " + ty);
+                        //console.log("CA: "+ Math.cos(DegToRad(angle)));
+                    }
+                    //console.log(tx);
+                    
+                    //xDist = ta*straightDistance;
+
+                    //tileX = Math.floor((Math.abs(playerX - xDist))/tileWidth);
+                    //tileY = Math.floor((Math.abs(playerY - straightDistance))/tileWidth);
+                    
+                    if (Math.abs(playerX + tx) >= 0 && Math.abs(playerX + tx) <= mapWidth*tileWidth && Math.abs(playerY + ty) >= 0 && Math.abs(playerY + ty) <= mapHeight*tileHeight)
+                    {
+                        xPoint = Math.abs(playerX + tx) % 64;
+                        yPoint = Math.abs(playerY + ty) % 64;
+                        if (col == 30)
+                        {
+                            console.log("XC: " + Math.abs(playerX + tx));
+                            console.log("YC: " + Math.abs(playerY + ty));
+                        }
+                        ctx.drawImage(floorImg, xPoint, yPoint, 1, 1, col, PJ, 1, 1);
+                        //ctx.putImageData(floordata, col, PJ, xPoint, yPoint, 1, 1);
+                    }
+                    
+
+                    PJ++;
+
+                    if (PJ == screenHeight)
+                    {
+                        
+                        loop = 0;
+                        break;
+                    }
+                }
+            }
+
+            function DrawMap()
+            {
+                mctx.fillStyle = "#FFFFFF";
+                mctx.fillRect(0,0,400,400);
+                mctx.fillStyle = "#FF0000";
+
+                for (i=0; i<mapWidth; i++)
+                {
+                    for (j=0; j<mapHeight; j++)
+                    {
+                        if (gameMap[i][j] == 1)
+                        {
+                            mctx.fillRect(i*tileWidth,j*tileHeight,tileWidth,tileHeight);
+                            mctx.strokeRect(i*tileWidth,j*tileHeight,tileWidth,tileHeight);
+                        }
+                        else
+                        {
+                            mctx.strokeRect(i*tileWidth,j*tileHeight,tileWidth,tileHeight);
+                        }
+                    }
+                }
+
+                mctx.fillStyle = "#00FF00";
+                mctx.fillRect(playerX-3,playerY-3,6,6);
+                
+            }
+
+            function DrawEditor()
+            {
+                ectx.fillStyle = "#FFFFFF";
+                ectx.fillRect(0,0,400,400);
+                ectx.fillStyle = "#FF0000";
+
+                for (i=0; i<mapWidth; i++)
+                {
+                    for (j=0; j<mapHeight; j++)
+                    {
+                        if (gameMap[i][j] == 1)
+                        {
+                            ectx.fillRect(i*tileWidth,j*tileHeight,tileWidth,tileHeight);
+                            ectx.strokeRect(i*tileWidth,j*tileHeight,tileWidth,tileHeight);
+                        }
+                        else
+                        {
+                            ectx.strokeRect(i*tileWidth,j*tileHeight,tileWidth,tileHeight);
+                        }
+                    }
+                }
+            }
+
+            function CastRay(angleA)
+            {
+                var tileX, tileY, distanceH, distanceV;
+                var loop;
+                var horiDist, vertDist;
+                var angle = angleA;
+                var mp;
+                var wallPosH, wallPosV;
+
+                // Fist we check if we are in a wall - shouldn't be but ti will prevent errors if we are
+                playerTileX = Math.ceil(playerX/tileWidth)-1;
+                playerTileY = Math.ceil(playerY/tileHeight)-1;
+                
+
+                if (IsWall(playerTileX,playerTileY))
+                {
+                    // we are in a wall so the distance is 0
+                    
+                    return [0,0];
+                }
+
+                // ****
+                // Checking the horizontal walls
+                // ****
+                if (angleA >= 0 && angleA < 180)
+                {
+                    horiY = playerTileY*tileWidth;                    
+                    horiX = playerX + ((Math.abs(playerY-horiY))/Math.tan(DegToRad(angle)));
+
+                    mctx.fillStyle = "#0000FF";
+                    mctx.fillRect(horiX-2,horiY-2,4,4);
+
+                    $("#ra").val(DegToRad(angle));
+                    $("#ta").val(Math.tan(DegToRad(angle)));
+
+                    tileX = Math.floor((horiX/tileWidth));
+                    tileY = Math.floor((horiY/tileWidth))-1;
+                    
+                    
+
+                    loop = 1;
+                    while (loop != 0)
+                    {
+                        if (horiX < 0 || horiX >= mapWidth*tileWidth || horiY < 0 || horiY >= mapHeight*tileHeight)
+                        {
+                            loop = 0;
+                            horiDist = -1;
+                            break;
+                        }
+                        if (IsWall(tileX,tileY))
+                        {
+                            // hit a wall
+                            horiDist = Math.sqrt( ((Math.abs(playerX-horiX))**2) + ((Math.abs(playerY-horiY))**2) );
+                            //horiDist = Math.abs((playerX-horiX)/Math.cos(angle));
+                            wallPosH = horiX % tileWidth;
+                            loop = 0;
+                            break;
+                        }
+                        horiY = horiY - tileWidth;
+                        horiX = horiX+((tileWidth)/Math.tan(DegToRad(angle)));
+                        
+                        mctx.fillRect(horiX-2,horiY-2,4,4);
+                        
+                        tileX = Math.floor(((horiX)/tileWidth));
+                        tileY = Math.floor(((horiY)/tileWidth))-1;
+                        
+                        
+                        
+                    }
+                }
+                else // angle >= 180 && < 360
+                {
+                    horiY = (playerTileY+1)*tileWidth;
+                    horiX = playerX - ((Math.abs(playerY-horiY))/Math.tan(DegToRad(angle)));
+                    
+                    mctx.fillStyle = "#0000FF";
+                    mctx.fillRect(horiX-2,horiY-2,4,4);
+                    
+                    $("#ra").val(DegToRad(angle));
+                    $("#ta").val(Math.tan(DegToRad(angle)));
+
+                    tileX = Math.floor((horiX/tileWidth));
+                    tileY = Math.floor((horiY/tileWidth));
+                    
+                    loop = 1;
+                    while (loop != 0)
+                    {
+                        if (horiX < 0 || horiX >= mapWidth*tileWidth || horiY < 0 || horiY >= mapHeight*tileHeight)
+                        {
+                            loop = 0;
+                            horiDist = -1;
+                            break;
+                        }
+                        if (IsWall(tileX,tileY))
+                        {
+                            // hit a wall
+                            horiDist = Math.sqrt( ((Math.abs(playerX-horiX))**2) + ((Math.abs(playerY-horiY))**2) );
+                            //horiDist = Math.abs((playerX-horiX)/Math.cos(angle));
+                            wallPosH = horiX % tileWidth;
+                            loop = 0;
+                            
+                            break;
+                        }
+                        horiY = horiY + tileWidth;
+                        horiX = horiX - ((tileWidth)/Math.tan(DegToRad(angle)));
+                        
+                        mctx.fillRect(horiX-2,horiY-2,4,4);
+                        
+                        tileX = Math.floor((horiX/tileWidth));
+                        tileY = Math.ceil((horiY/tileWidth));                        
+                        
+                    }
+                }
+
+                // ****
+                // Checking the vertical walls
+                // ****
+                if (angleA > 90 && angleA < 270)
+                {
+                    vertX = (playerTileX)*tileWidth;
+                    vertY = playerY + ((Math.abs(playerX-vertX))*Math.tan(DegToRad(angle)));
+                    
+                    mctx.fillStyle = "#FF00FF";
+                    mctx.fillRect(vertX-2,vertY-2,4,4);
+                    tileX = Math.floor((vertX/tileWidth))-1;
+                    tileY = Math.floor((vertY/tileWidth));
+
+                    
+                    loop = 1;
+                    while (loop != 0)
+                    {
+                        if (vertX < 0 || vertX >= mapWidth*tileWidth || vertY < 0 || vertY >= mapHeight*tileHeight)
+                        {
+                            loop = 0;
+                            vertDist = -1;
+                            break;
+                        }
+                        if (IsWall(tileX,tileY))
+                        {
+                            // hit a wall
+                            vertDist = Math.sqrt( ((Math.abs(playerX-vertX))**2) + ((Math.abs(playerY-vertY))**2) );
+                            //vertDist = Math.abs((playerX-vertX)/Math.cos(angle));
+                            wallPosV = vertY % tileWidth;
+                            loop = 0;
+                            
+                            break;
+                        }
+                        vertX = vertX - tileWidth;
+                        vertY = vertY + ((tileWidth)*Math.tan(DegToRad(angle)));
+                        
+                        mctx.fillRect(vertX-2,vertY-2,4,4);
+                        
+                        tileX = Math.floor((vertX/tileWidth))-1;
+                        tileY = Math.floor((vertY/tileWidth));
+                        
+                        
+                        
+                    }
+
+                    
+                }
+                else
+                {
+                    vertX = (playerTileX+1)*tileWidth;
+                    vertY = playerY - ((Math.abs(playerX-vertX))*Math.tan(DegToRad(angle)));
+
+                    mctx.fillStyle = "#FF00FF";
+                    mctx.fillRect(vertX-2,vertY-2,4,4);
+                    tileX = Math.floor((vertX/tileWidth));
+                    tileY = Math.floor((vertY/tileWidth));
+                    
+                    loop = 1;
+                    while (loop != 0)
+                    {
+                        if (vertX < 0 || vertX >= mapWidth*tileWidth || vertY < 0 || vertY >= mapHeight*tileHeight)
+                        {
+                            loop = 0;
+                            vertDist = -1;
+                            break;
+                        }
+                        if (IsWall(tileX,tileY))
+                        {
+                            // hit a wall
+                            vertDist = Math.sqrt( ((Math.abs(playerX-vertX))**2) + ((Math.abs(playerY-vertY))**2) );
+                            //vertDist = Math.abs((playerX-vertX)/Math.cos(angle));
+                            wallPosV = vertY % tileWidth;
+                            loop = 0;
+                            
+                            break;
+                        }
+                        vertX = vertX + tileWidth;
+                        vertY = vertY-((tileWidth)*Math.tan(DegToRad(angle)));
+                        
+                        mctx.fillRect(vertX-2,vertY-2,4,4);
+
+                        tileX = Math.floor((vertX/tileWidth));
+                        tileY = Math.floor((vertY/tileWidth));
+                        
+                        
+                    }
+                    
+                    
+                    
+                }
+                              
+                
+
+                if (horiDist > -1 && vertDist > -1)
+                {
+                    if (horiDist < vertDist)
+                    {
+                        mctx.fillStyle = "#FFFFFF";
+                        mctx.fillRect(horiX-2,horiY-2,4,4);
+                        return [horiDist,wallPosH];
+                    }
+                    else
+                    {
+                        mctx.fillStyle = "#FFFFFF";
+                        mctx.fillRect(vertX-2,vertY-2,4,4);
+                        return [vertDist,wallPosV];
+                    }
+                }
+                else if (horiDist == -1 && vertDist > -1)
+                {
+                    mctx.fillStyle = "#FFFFFF";
+                    mctx.fillRect(vertX-2,vertY-2,4,4);
+                    return [vertDist,wallPosV];
+                }
+                else if (vertDist == -1 && horiDist > -1)
+                {
+                    mctx.fillStyle = "#FFFFFF";
+                    mctx.fillRect(horiX-2,horiY-2,4,4);
+                    return [horiDist,wallPosH];
+                }
+                else
+                {
+                    //alert(angleA);
+                }
+            }
+
+
+            function IsWall(x,y)
+            {
+                if (gameMap[x][y] == 1)
+                {
+                    return true;
+                }
+                else
+                {
+                    return false;
+                }
+            }
+
+            function DegToRad(angle)
+            {
+                return (angle*Math.PI)/180;
+            }
+
+            function RadToDeg(angle)
+            {
+                return (angle*180)/Math.PI;
+            }
+
+            // ****
+            // This function does some calculations that can be done prior to the game running to make the game quicker
+            // ****
+            function InitialCalcs()
+            {
+                // Work out the angle increments for each screen column
+                angIncArr = []; 
+                            
+                for (i=0; i<screenWidth; i++)
+                {
+                    // dividing FOV by screenWidth isn't that accurate due to stretching, so this makes it slightly more accurate
+                    angIncArr[i] = RadToDeg(Math.atan( (i-(screenWidth/2)) / projectionPlane));
+                }
+            }
+        </script>
+    </head>
+    <body onload="init()">
+        <canvas id="game_canvas" style="border: 1px solid black;" TABINDEX=0></canvas>
+        <canvas id="edit_canvas" width=320 height=320 style="border: 1px solid black;" TABINDEX=1></canvas>
+        <!--<div><button>Add Row</button><button>Add Column</button></div><br><br>-->
+        <canvas id="map_canvas" style="border: 1px solid black;" width=400 height=400 hidden></canvas>
+        Rad angle: <input type="text" id="ra"><br>
+        Tan angle: <input type="text" id="ta">
+        <div>
+            <img id="wall" src="images/wall.png" width=64 height=64>
+            <img id="floor" src="images/floor.png" width=64 height=64>
+        </div>
+    </body>
+</html>

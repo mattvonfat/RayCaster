@@ -1,0 +1,70 @@
+<html>
+    <head>
+        <title>Ray Casting Game</title>
+
+        <script src="TGame.js"></script>
+        <script src="TCanvas.js"></script>
+        <script src="TEditor.js"></script>
+        <script src="TMap.js"></script>
+        <script src="TPlayer.js"></script>
+        <link rel="stylesheet" href="//code.jquery.com/ui/1.13.2/themes/base/jquery-ui.css">
+        <script src="https://code.jquery.com/jquery-3.6.0.js"></script>
+        <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.js"></script>
+
+        <style>
+            @font-face { font-family: customRetro; src: url(fonts/retro.ttf); }
+        </style>
+
+        <script>
+            const TileType = Object.freeze({'oob': 1, 'empty': 2, 'wall': 3});
+
+            function init()
+            {
+                var wspinner = $( "#width_spinner" ).spinner();
+                var hspinner = $( "#height_spinner" ).spinner();
+
+                var player = new TPlayer(160,200,90,32,5);
+                var map = new TMap(10,10);
+                map.CreateSimpleMap();
+                var game = new TGame("game_canvas",480,320,90.0,64,32,player,map);
+                game.LoadImages("wall","floor");
+
+                var editor = new TEditor("editor_canvas", 400, 400, map);
+
+                game.RunPrecalculations();
+
+                
+
+                game.Start();
+            }
+
+            function DegToRad(angle)
+            {
+                return (angle*Math.PI)/180;
+            }
+
+            function RadToDeg(angle)
+            {
+                return (angle*180)/Math.PI;
+            }
+        </script>
+    </head>
+    
+    <body onload="init()" style="background-color: rgb(156, 164, 171);">
+        <center>
+            <br>
+            <div style="font-family: customRetro; font-size: 30px;">Ray Casting Game</div><br>
+
+            <div style="background-color: black; width: 480px;"><canvas id="game_canvas" style="border: 1px solid black;" TABINDEX=0></canvas></div>
+            <div><canvas id="editor_canvas" style="border: 1px solid black;" TABINDEX=1></canvas></div>
+            <div>
+                Width: <input id="width_spinner" name="width" style="width: 40px;"><br>
+                Height: <input id="height_spinner" name="height" style="width: 40px;"><br>
+                
+            
+            </div>
+            <br><img src="images/wall.png" id="1" hidden>
+            <br><img src="images/floor32.png" id="2" hidden>
+        </center>
+    </body>
+</html>

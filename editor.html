@@ -1,0 +1,62 @@
+<html>
+    <head>
+        <title>Ray Casting Game Map Editor</title>
+
+        <script src="TMap.js"></script>
+        <script src="TEditor.js"></script>
+        <link rel="stylesheet" href="//code.jquery.com/ui/1.13.2/themes/base/jquery-ui.css">
+        <script src="https://code.jquery.com/jquery-3.6.0.js"></script>
+        <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.js"></script>
+
+        <style>
+            @font-face { font-family: customRetro; src: url(fonts/retro.ttf); }
+        </style>
+
+        <script>
+            var map;
+            var mapText = "";
+
+            function init()
+            {
+                var wspinner = $( "#width_spinner" ).spinner();
+                var hspinner = $( "#height_spinner" ).spinner();
+
+                map = new TMap(10,10);
+                map.CreateSimpleMap();
+
+                var editor = new TEditor("editor_canvas", 600, 600, map);
+            }
+
+            function GenerateMapText()
+            {
+                var mapObject = map.GenerateMapObject();
+                mapText = JSON.stringify(mapObject);
+                $("#map_text").text(mapText);
+            }
+
+            function CopyMapText()
+            {
+                navigator.clipboard.writeText(mapText);
+            }
+        </script>
+    </head>
+    
+    <body onload="init()" style="background-color: rgb(156, 164, 171);">
+        <div style="margin: auto; width: 90%;">
+            <div style="font-family: customRetro; font-size: 30px; margin-top: 30px; margin-bottom: 20px; text-align: center;">Ray Casting Game Map Editor</div>
+
+            <div style="margin: auto; width: 900px;">
+                <div style="width: 600px; float: left;"><canvas id="editor_canvas" style="border: 1px solid black;" TABINDEX=1></canvas></div>
+                <div style="width: 280px; text-align: left; padding: 10px; float: right;">
+                    Map Width: <input id="width_spinner" name="width" style="width: 40px;"><br>
+                    Map Height: <input id="height_spinner" name="height" style="width: 40px;">
+                </div>
+                <div style="margin: auto; width: 600px; text-align: center; padding: 10px; clear: left;">
+                    <button onclick="GenerateMapText()">Generate Map Text</button> <button onclick="CopyMapText()">Copy Map Text</button>
+                    <textarea id="map_text" style="width: 400; height: 100;"></textarea><br>
+                    Click <a href="http://mattvonfat.com/raycaster/index.html">here</a> to go back to the game.
+                </div>
+            </div>
+        </div>
+    </body>
+</html>
